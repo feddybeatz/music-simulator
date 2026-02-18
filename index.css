@@ -1,0 +1,24 @@
+/* Minimal stylesheet to satisfy Vite's /index.css request.
+   Tailwind is currently loaded via CDN in index.html for dev.
+   In production you should install Tailwind as a PostCSS plugin.
+*/
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background-color: #050505;
+    color: #f0f0f0;
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  }
+}
+
+/* Small utility styles used by the app beyond Tailwind */
+.neon-text { text-shadow: 0 0 10px rgba(139,92,246,0.5); }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* scrollbar styling for desktop */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #0b0b0b; }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 6px; }
