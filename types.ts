@@ -42,7 +42,7 @@ export enum View {
   AWARDS = 'awards',
   BANK = 'bank',
   RHYTHM_GAME = 'rhythm_game',
-  CHARACTER = 'character',
+  // Removed CHARACTER view (customizer removed)
   SHOP = 'shop',
   PLAYLISTS = 'playlists'
 }
@@ -56,23 +56,9 @@ export interface ArtistStats {
   stagePresence: number;
 }
 
-export interface CharacterCustomization {
-  hair: string;
-  hairColor: string;
-  beard: string;
-  eyebrow: string;
-  nose: string;
-  eyebase: string;
-  eyes: string;
-  eyeColor: string;
-  bodyType: string;
-  skinMaterial: string;
-  gender: 'Male' | 'Female' | 'Other';
-  topColor: string;
-  bottomColor: string;
-  bottomMat: string;
-  pose: string;
-}
+// Character customization removed — UI trimmed to focus on gameplay.
+// If you need to reintroduce character customization later,
+// add a `CharacterCustomization` interface here and a `character` field to `SaveData`.
 
 export interface PlaylistMetadata {
   id: string;
@@ -126,6 +112,14 @@ export interface Song {
   lastWeekSales?: number;
   chartPositions?: ChartPosition[];
   payolaSpent?: number;
+  // Viral system fields
+  viral_score?: number; // 0-100
+  is_viral?: boolean;
+  viral_level?: 'minor' | 'medium' | 'major' | 'global' | 'legendary' | null;
+  viral_start_week?: number;
+  viral_remaining_weeks?: number;
+  viral_total_weeks?: number;
+  viral_peak_streams?: number;
 }
 
 export interface Achievement {
@@ -231,7 +225,7 @@ export interface SaveData {
   awards: string[];
   subscribers: number;
   loan: number;
-  character: CharacterCustomization;
+  // character removed — customization UI deleted per request
   achievements: Achievement[];
   shopItems: ShopItem[];
   playlistPresence: { [playlistId: string]: ChartPosition };

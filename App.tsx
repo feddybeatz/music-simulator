@@ -14,7 +14,6 @@ import {
 } from './constants';
 import { simulateWeek, getAllChartsWithAI } from './services/gameEngine';
 import PlaylistsView from './components/PlaylistsView';
-import CharacterCustomizer from './components/CharacterCustomizer';
 import AchievementsShop from './components/AchievementsShop';
 import PerformanceShow from './components/PerformanceShow';
 import StreamingView from './components/StreamingView';
@@ -127,7 +126,14 @@ const App: React.FC = () => {
         isReleased: false,
         totalStreams: { spotify: 0, apple: 0 },
         totalSales: 0,
-        artwork: `https://picsum.photos/seed/${Math.random()}/200/200`
+        artwork: `https://picsum.photos/seed/${Math.random()}/200/200`,
+        viral_score: 0,
+        is_viral: false,
+        viral_level: null,
+        viral_start_week: undefined,
+        viral_remaining_weeks: 0,
+        viral_total_weeks: 0,
+        viral_peak_streams: 0
       };
       nextSave.catalog.push(newSong);
     }
@@ -221,7 +227,7 @@ const App: React.FC = () => {
         <nav className="flex-1 px-6 space-y-2 overflow-y-auto">
           <NavItem active={view === View.DASHBOARD} icon={<LayoutDashboard size={20}/>} label="Dashboard" onClick={() => setView(View.DASHBOARD)} />
           <NavItem active={view === View.ACTIVITIES} icon={<Activity size={20}/>} label="Activities" onClick={() => setView(View.ACTIVITIES)} />
-          <NavItem active={view === View.CHARACTER} icon={<Palette size={20}/>} label="Customize" onClick={() => setView(View.CHARACTER)} />
+          {/* Customize removed */}
           <NavItem active={view === View.PLAYLISTS} icon={<Music size={20}/>} label="Playlists" onClick={() => setView(View.PLAYLISTS)} />
           <NavItem active={view === View.RHYTHM_GAME} icon={<Play size={20}/>} label="Perform Show" onClick={() => setView(View.RHYTHM_GAME)} />
           <NavItem active={view === View.RELEASES} icon={<Music size={20}/>} label="My Catalog" onClick={() => setView(View.RELEASES)} />
@@ -263,11 +269,7 @@ const App: React.FC = () => {
           <AnimatePresence mode="wait">
             <motion.div key={view} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
               {view === View.DASHBOARD && <DashboardView save={save} onNav={setView}/>}
-              {view === View.CHARACTER && <CharacterCustomizer character={save.character} onUpdate={(char) => {
-                const s = { ...save, character: char };
-                setCurrentSave(s);
-                setSaves(prev => prev.map(x => x.id === s.id ? s : x));
-              }} />}
+              {/* Character customizer removed */}
               {view === View.PLAYLISTS && <PlaylistsView save={save} />}
               {view === View.STREAMING && <StreamingView save={save} />}
               {view === View.SHOP && <MerchandiseView save={save} onCreateMerch={(item) => {

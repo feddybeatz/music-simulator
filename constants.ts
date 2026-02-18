@@ -1,5 +1,5 @@
 
-import { Region, Genre, CharacterCustomization, SaveData, Achievement, ShopItem, Trend, ArtistAI, StreamingPlatform, MerchandiseItem } from './types';
+import { Region, Genre, SaveData, Achievement, ShopItem, Trend, ArtistAI, StreamingPlatform, MerchandiseItem } from './types';
 
 export const CAREER_STAGES = [
   "Unknown Artist",
@@ -49,24 +49,7 @@ export const GENRE_COLORS: { [key in Genre]: string } = {
   [Genre.ALTERNATIVE]: 'bg-slate-600'
 };
 
-// DEFAULT CHARACTER CUSTOMIZATION
-export const DEFAULT_CHARACTER: CharacterCustomization = {
-  hair: 'short',
-  hairColor: '#3D3D3D',
-  beard: 'none',
-  eyebrow: 'default',
-  nose: 'default',
-  eyebase: 'default',
-  eyes: 'brown',
-  eyeColor: '#8B4513',
-  bodyType: 'athletic',
-  skinMaterial: 'smooth',
-  gender: 'Male',
-  topColor: '#1F2937',
-  bottomColor: '#374151',
-  bottomMat: 'fabric',
-  pose: 'standing_1_19'
-};
+// Character customization removed — defaults omitted.
 
 // ACHIEVEMENTS
 export const ACHIEVEMENTS: Achievement[] = [
@@ -137,22 +120,7 @@ export const ACHIEVEMENTS: Achievement[] = [
 
 // SHOP ITEMS
 export const SHOP_ITEMS: ShopItem[] = [
-  {
-    id: 'hair-long',
-    name: 'Long Hair',
-    price: 500,
-    type: 'character',
-    description: 'Unlock long hair style',
-    owned: false
-  },
-  {
-    id: 'hair-curly',
-    name: 'Curly Hair',
-    price: 750,
-    type: 'character',
-    description: 'Unlock curly hair style',
-    owned: false
-  },
+  // character items removed — customization feature deleted
   {
     id: 'guitar-gold',
     name: 'Gold Guitar',
@@ -161,6 +129,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: 'Show off with a gold guitar',
     owned: false
   },
+  
   {
     id: 'outfit-diamond',
     name: 'Diamond Outfit',
@@ -321,7 +290,6 @@ export const INITIAL_SAVE = (name: string, region: Region): SaveData => ({
   awards: [],
   subscribers: 1000,
   loan: 0,
-  character: DEFAULT_CHARACTER,
   achievements: ACHIEVEMENTS.map(a => ({ ...a })),
   shopItems: SHOP_ITEMS.map(i => ({ ...i })),
   playlistPresence: {},

@@ -22,8 +22,61 @@ export const autoGenerateSong = (save: SaveData): Song => {
     isReleased: false,
     totalStreams: {},
     totalSales: 0,
-    artwork: `https://via.placeholder.com/200?text=${encodeURIComponent(generateSongName())}`
+    artwork: `https://via.placeholder.com/200?text=${encodeURIComponent(generateSongName())}`,
+    // viral defaults
+    viral_score: 0,
+    is_viral: false,
+    viral_level: null,
+    viral_start_week: undefined,
+    viral_remaining_weeks: 0,
+    viral_total_weeks: 0,
+    viral_peak_streams: 0
   };
+};
+
+// Viral helpers
+const computeViralScore = (song: Song, save: SaveData) => {
+  const song_quality = Math.max(0, Math.min(100, song.quality || 0));
+  const artist_popularity = Math.max(0, Math.min(100, save.popularity || 0));
+  // artist_hype approximated by recent XP and career level
+  const artist_hype = Math.max(0, Math.min(100, (save.xp / Math.max(1, (calculateXPForLevel(save.careerLevel) || 1))) * 100));
+  const marketing_level = Math.max(0, Math.min(100, Math.min(100, save.payola || 0) / 10));
+  const trend_alignment = Math.max(0, Math.min(100, song.trendScore || 0));
+  const social_media_activity = Math.max(0, Math.min(100, (save.subscribers || 0) / Math.max(1, (save.fans || 1)) * 10));
+  const fan_loyalty = Math.max(0, Math.min(100, (save.popularity || 0)));
+  const random_factor = Math.random() * 100;
+
+  const viral_score = (
+    (song_quality * 0.25) +
+    (artist_popularity * 0.15) +
+    (artist_hype * 0.15) +
+    (marketing_level * 0.15) +
+    (trend_alignment * 0.15) +
+    (social_media_activity * 0.10) +
+    (fan_loyalty * 0.10) +
+    (random_factor * 0.10)
+  ) / 1.15; // normalize slightly
+
+  return Math.max(0, Math.min(100, viral_score));
+};
+
+const pickViralLevel = (): { level: Song['viral_level']; multiplier: number; duration: number; fansBoost: number } => {
+  const r = Math.random();
+  if (r < 0.60) return { level: 'minor', multiplier: 2, duration: 2, fansBoost: 100 };
+  if (r < 0.85) return { level: 'medium', multiplier: 5, duration: 3, fansBoost: 2000 };
+  if (r < 0.95) return { level: 'major', multiplier: 10, duration: 5, fansBoost: 50000 };
+  if (r < 0.995) return { level: 'global', multiplier: 50, duration: 8, fansBoost: 500000 };
+  return { level: 'legendary', multiplier: 100, duration: 12, fansBoost: 5000000 };
+};
+
+const viralDecayFactor = (weekIndex: number) => {
+  // weekIndex = 1 => 1.0, 2 => 0.8, 3 => 0.6, 4 => 0.4, 5 => 0.2, >5 => 0.1
+  if (weekIndex <= 1) return 1;
+  if (weekIndex === 2) return 0.8;
+  if (weekIndex === 3) return 0.6;
+  if (weekIndex === 4) return 0.4;
+  if (weekIndex === 5) return 0.2;
+  return 0.1;
 };
 
 // Simulate AI artists releasing songs and building career
@@ -54,6 +107,14 @@ export const simulateAIArtists = (save: SaveData): SaveData => {
         totalSales: 0,
         artwork: `https://via.placeholder.com/200?text=${encodeURIComponent(artist.name)}`
       };
+
+      // Initialize viral fields for AI songs
+      newSong.viral_score = 0;
+      newSong.is_viral = false;
+      newSong.viral_level = null;
+      newSong.viral_remaining_weeks = 0;
+      newSong.viral_total_weeks = 0;
+      newSong.viral_peak_streams = 0;
       
       // Generate streams for AI artist song
       const chartQuality = newSong.quality + newSong.trendScore;
@@ -215,7 +276,7 @@ export const simulateWeek = (save: SaveData): SaveData => {
   newSave.catalog = newSave.catalog.map(song => {
     if (!song.isReleased) return song;
 
-    const updatedSong = { ...song };
+    const updatedSong = { ...song } as Song;
     
     // Update chart positions
     if (updatedSong.chartPositions) {
@@ -235,11 +296,91 @@ export const simulateWeek = (save: SaveData): SaveData => {
       chartBonus = 1 + (100 - avgChartPos) / 200; // Better chart position = more streams
     }
 
+    // Calculate base weekly points and streams
     const weeklyPoints = (
       (song.quality * 8 + song.trendScore * 4 + newSave.popularity * 10) * decay * chartBonus
     );
-    
-    const streamCount = Math.floor(weeklyPoints * 200);
+
+    let streamCount = Math.floor(weeklyPoints * 200);
+
+    // --- Viral system integration ---
+    // Ensure viral fields exist
+    updatedSong.viral_score = computeViralScore(updatedSong, newSave);
+
+    // Chance to trigger viral event this week
+    const viralProbability = updatedSong.viral_score / 100;
+    if (!updatedSong.is_viral && Math.random() < viralProbability) {
+      const picked = pickViralLevel();
+      updatedSong.is_viral = true;
+      updatedSong.viral_level = picked.level;
+      updatedSong.viral_total_weeks = picked.duration;
+      updatedSong.viral_remaining_weeks = picked.duration;
+      updatedSong.viral_start_week = newSave.week + (newSave.year * 52);
+      // immediate fans boost
+      newSave.fans += picked.fansBoost;
+      // bump popularity a bit
+      newSave.popularity = Math.min(100, newSave.popularity + Math.min(20, Math.log10(picked.fansBoost + 1) * 8));
+    }
+
+    // If currently viral, apply multiplier with decay
+    if (updatedSong.is_viral && updatedSong.viral_remaining_weeks && updatedSong.viral_total_weeks) {
+      const weekIndex = (updatedSong.viral_total_weeks - updatedSong.viral_remaining_weeks) + 1;
+      let baseMult = 1;
+      switch (updatedSong.viral_level) {
+        case 'minor': baseMult = 2; break;
+        case 'medium': baseMult = 5; break;
+        case 'major': baseMult = 10; break;
+        case 'global': baseMult = 50; break;
+        case 'legendary': baseMult = 100; break;
+        default: baseMult = 1;
+      }
+      const decay = viralDecayFactor(weekIndex);
+      const appliedMult = Math.max(1, Math.floor(baseMult * decay));
+      streamCount = Math.floor(streamCount * appliedMult);
+
+      // track peak streams
+      updatedSong.viral_peak_streams = Math.max(updatedSong.viral_peak_streams || 0, streamCount);
+
+      // social media growth tied to viral level and decay
+      const socialFans = Math.floor((streamCount / 1000) * (decay * 0.6));
+      newSave.fans += socialFans;
+
+      // decrease remaining weeks
+      updatedSong.viral_remaining_weeks = Math.max(0, (updatedSong.viral_remaining_weeks || 0) - 1);
+      if (updatedSong.viral_remaining_weeks === 0) {
+        updatedSong.is_viral = false;
+        updatedSong.viral_level = null;
+        updatedSong.viral_total_weeks = 0;
+      }
+    }
+
+    // Delayed TikTok chance: small separate trigger that can massively boost streams
+    if (Math.random() < 0.01) { // 1% weekly chance per song
+      const tiktokMult = 10 + Math.floor(Math.random() * 40); // 10x - 50x
+      streamCount = Math.floor(streamCount * tiktokMult);
+      newSave.fans += Math.floor(streamCount * 0.02);
+      newSave.popularity = Math.min(100, newSave.popularity + 2);
+      // mark as viral-ish
+      updatedSong.is_viral = true;
+      updatedSong.viral_level = 'major';
+      updatedSong.viral_total_weeks = 3;
+      updatedSong.viral_remaining_weeks = 2;
+    }
+
+    // FLOP system: if viral_score very low, chance to flop
+    if (updatedSong.viral_score < 15 && Math.random() < 0.12) {
+      // Flop: streams drop to a very low baseline
+      streamCount = Math.floor(Math.random() * 400) + 50; // 50-449
+      // fans decay slightly
+      newSave.fans = Math.max(0, newSave.fans - Math.floor(streamCount * 0.01));
+    }
+
+    // Trend-match boost: if song genre matches a current trend, add small bump
+    const currentTrend = getTrendingGenre(newSave.currentTrends || [], newSave.week);
+    if (currentTrend && currentTrend === song.genre) {
+      streamCount = Math.floor(streamCount * 1.2);
+      updatedSong.viral_score = Math.min(100, (updatedSong.viral_score || 0) + 20);
+    }
     const newSales = Math.floor(streamCount * 0.02); // Rough conversion: streams to sales
     
     weeklyListeners += streamCount;
@@ -372,3 +513,4 @@ export const releaseSongToCharts = (song: Song, save: SaveData, playlistIds?: st
 
   return updatedSong;
 };
+
