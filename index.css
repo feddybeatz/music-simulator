@@ -2,6 +2,10 @@
    Tailwind is currently loaded via CDN in index.html for dev.
    In production you should install Tailwind as a PostCSS plugin.
 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @layer base {
   html, body, #root {
     height: 100%;
