@@ -210,6 +210,7 @@ export interface MerchandiseItem {
 export interface SaveData {
   id: string;
   artistName: string;
+  artistCode?: string;
   homeRegion: Region;
   funds: number;
   fans: number;

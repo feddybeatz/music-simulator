@@ -1,5 +1,5 @@
 
-import { SaveData, Song, ChartPosition, PlaylistMetadata, ArtistAI, Trend } from '../types';
+import { SaveData, Song, ChartPosition, PlaylistMetadata, ArtistAI, Trend, Genre } from '../types';
 import { PLAYLISTS } from '../data/playlists';
 import { generateSongName, getTrendingGenre, STREAMING_PLATFORMS } from '../constants';
 
@@ -8,11 +8,11 @@ export const calculateXPForLevel = (level: number) => Math.pow(level, 2) * 500;
 // Auto-generate a song based on current trends
 export const autoGenerateSong = (save: SaveData): Song => {
   const trendingGenre = getTrendingGenre(save.currentTrends || [], save.week);
-  const genre = trendingGenre || save.catalog[0]?.genre || 'Pop';
-  
+  const genre = trendingGenre || save.catalog[0]?.genre || Genre.POP;
+
   const activeTrends = (save.currentTrends || []).filter(t => t.startWeek <= save.week && t.endWeek >= save.week);
   const trendBoost = activeTrends.length > 0 ? activeTrends[0].strength : 30;
-  
+
   return {
     id: `song-${Date.now()}`,
     title: generateSongName(),
@@ -82,16 +82,16 @@ const viralDecayFactor = (weekIndex: number) => {
 // Simulate AI artists releasing songs and building career
 export const simulateAIArtists = (save: SaveData): SaveData => {
   const newSave = JSON.parse(JSON.stringify(save)) as SaveData;
-  
+
   // Each AI artist has chance to release a song
   newSave.aiArtists = (newSave.aiArtists || []).map(artist => {
     const updatedArtist = { ...artist };
-    
+
     // 40% chance to release a song this week
     if (Math.random() < 0.4) {
       const trendingGenre = getTrendingGenre(newSave.currentTrends || [], newSave.week);
       const songGenre = trendingGenre || artist.genre;
-      
+
       const newSong: Song = {
         id: `ai-song-${artist.id}-${newSave.week}`,
         title: generateSongName(),
@@ -115,67 +115,86 @@ export const simulateAIArtists = (save: SaveData): SaveData => {
       newSong.viral_remaining_weeks = 0;
       newSong.viral_total_weeks = 0;
       newSong.viral_peak_streams = 0;
-      
+
       // Generate streams for AI artist song
       const chartQuality = newSong.quality + newSong.trendScore;
       const streams = Math.floor((chartQuality * 50 + Math.random() * 5000) * (artist.careerLevel / 5));
       newSong.totalStreams = { 'total': streams };
       newSong.totalSales = Math.floor(streams * 0.02);
-      
+
       updatedArtist.catalog.push(newSong);
       updatedArtist.fans += Math.floor(streams * 0.001);
       updatedArtist.popularity = Math.min(100, updatedArtist.popularity + Math.random() * 5);
     }
-    
+
     // AI artists naturally gain/lose fans and popularity
     updatedArtist.fans = Math.max(100, updatedArtist.fans + (Math.random() * 2000 - 500));
     updatedArtist.popularity = Math.max(10, Math.min(100, updatedArtist.popularity + (Math.random() * 10 - 3)));
-    
+
     return updatedArtist;
   });
-  
+
   return newSave;
 };
 
+// Get total streams for a song across all platforms
+const getSongTotalStreams = (song: Song): number => {
+  return song.totalStreams['all'] || Object.values(song.totalStreams).reduce((a, b) => a + b, 0);
+};
+
 // Get all songs on charts (player + AI) for display
-export const getAllChartsWithAI = (save: SaveData): { song: Song; chartPosition: ChartPosition; artistName: string }[] => {
-  const chartsData: { song: Song; chartPosition: ChartPosition; artistName: string }[] = [];
-  
+export const getAllChartsWithAI = (save: SaveData): { song: Song; chartPosition: ChartPosition; artistName: string; totalStreams: number }[] => {
+  const chartsData: { song: Song; chartPosition: ChartPosition; artistName: string; totalStreams: number }[] = [];
+
   // Add player songs
   save.catalog.forEach(song => {
-    if (song.isReleased && song.chartPositions) {
-      song.chartPositions.forEach(chartPos => {
-        chartsData.push({
-          song,
-          chartPosition: chartPos,
-          artistName: save.artistName
-        });
-      });
-    }
-  });
-  
-  // Add AI artist songs
-  (save.aiArtists || []).forEach(artist => {
-    artist.catalog.forEach(song => {
-      if (song.isReleased) {
-        // AI songs always chart
+    if (song.isReleased) {
+      const totalStreams = getSongTotalStreams(song);
+      if (totalStreams > 0) {
         chartsData.push({
           song,
           chartPosition: {
-            playlistId: 'ai-chart',
-            position: Math.floor(Math.random() * 50) + 10,
-            weeksOnChart: 1,
-            peakPosition: Math.floor(Math.random() * 30) + 5,
-            debutWeek: song.releaseWeek || 1
+            playlistId: 'player-chart',
+            position: 1, // placeholder, sorted by streams
+            weeksOnChart: song.releaseWeek ? Math.max(1, (save.week + save.year * 52) - (song.releaseWeek + (song.releaseYear || 1) * 52)) : 1,
+            peakPosition: song.peakChartPosition || 1,
+            debutWeek: song.releaseWeek || save.week
           },
-          artistName: artist.name
+          artistName: save.artistName,
+          totalStreams
         });
       }
+    }
+  });
+
+  // Add AI artist songs — only their latest few songs per artist to avoid chart flooding
+  (save.aiArtists || []).forEach(artist => {
+    const releasedSongs = artist.catalog.filter(s => s.isReleased);
+    // take only the 3 most recent songs per AI artist
+    const recentSongs = releasedSongs.slice(-3);
+    recentSongs.forEach(song => {
+      const totalStreams = getSongTotalStreams(song);
+      chartsData.push({
+        song,
+        chartPosition: {
+          playlistId: 'ai-chart',
+          position: 1, // placeholder
+          weeksOnChart: 1,
+          peakPosition: 50,
+          debutWeek: song.releaseWeek || 1
+        },
+        artistName: artist.name,
+        totalStreams
+      });
     });
   });
-  
-  // Sort by position and return top 100
-  return chartsData.sort((a, b) => a.chartPosition.position - b.chartPosition.position).slice(0, 100);
+
+  // Sort by totalStreams descending and add real positions
+  const sorted = chartsData.sort((a, b) => b.totalStreams - a.totalStreams).slice(0, 100);
+  return sorted.map((entry, i) => ({
+    ...entry,
+    chartPosition: { ...entry.chartPosition, position: i + 1 }
+  }));
 };
 
 // Calculate chart positions for released songs
@@ -186,12 +205,12 @@ export const calculateChartPositions = (song: Song, save: SaveData): ChartPositi
   // Each song can chart on multiple playlists based on genre and quality
   const qualityScore = song.quality + song.trendScore;
   const genreMatches = PLAYLISTS.filter(p => p.style === song.genre);
-  
+
   genreMatches.forEach((playlist, idx) => {
     // Quality affects chart position (higher quality = better position)
     const basePosition = Math.floor(95 - (qualityScore * 0.5) + Math.random() * 30);
     const finalPosition = Math.max(1, Math.min(playlist.maxSongs, basePosition));
-    
+
     if (Math.random() < 0.6 || qualityScore > 70) { // 60% chance or if quality is high
       positions.push({
         playlistId: playlist.id,
@@ -209,34 +228,34 @@ export const calculateChartPositions = (song: Song, save: SaveData): ChartPositi
 // Update chart positions for songs already on charts
 export const updateChartPositions = (song: Song, save: SaveData): ChartPosition[] => {
   if (!song.chartPositions) return [];
-  
+
   return song.chartPositions.map(chart => {
     const weeksActive = save.week - chart.debutWeek;
     const decay = Math.pow(0.95, weeksActive); // Slight position decay over time
     const volatility = Math.random() * 10 - 5; // Random movement
-    
+
     const newPosition = Math.max(
       1,
       Math.min(100, Math.floor(chart.position * (decay + volatility / 100)))
     );
-    
+
     const newChartPosition: ChartPosition = {
       ...chart,
       position: newPosition,
       weeksOnChart: chart.weeksOnChart + 1,
       peakPosition: Math.min(chart.peakPosition, newPosition)
     };
-    
+
     return newChartPosition;
   }).filter(c => c.position <= 100); // Remove songs that charted out
 };
 
 export const simulateWeek = (save: SaveData): SaveData => {
   let newSave = JSON.parse(JSON.stringify(save)) as SaveData;
-  
+
   // 0. Simulate AI artists
   newSave = simulateAIArtists(newSave);
-  
+
   // 1. Advance Time
   newSave.week += 1;
   if (newSave.week > 52) {
@@ -277,11 +296,11 @@ export const simulateWeek = (save: SaveData): SaveData => {
     if (!song.isReleased) return song;
 
     const updatedSong = { ...song } as Song;
-    
+
     // Update chart positions
     if (updatedSong.chartPositions) {
       updatedSong.chartPositions = updateChartPositions(updatedSong, newSave);
-      updatedSong.peakChartPosition = updatedSong.chartPositions.length > 0 
+      updatedSong.peakChartPosition = updatedSong.chartPositions.length > 0
         ? Math.min(...updatedSong.chartPositions.map(c => c.position))
         : undefined;
     }
@@ -289,7 +308,7 @@ export const simulateWeek = (save: SaveData): SaveData => {
     // Calculate streams based on chart performance and quality
     const weeksActive = (newSave.week + newSave.year * 52) - (song.releaseWeek! + song.releaseYear! * 52);
     const decay = Math.pow(0.92, Math.max(0, weeksActive));
-    
+
     let chartBonus = 1;
     if (updatedSong.chartPositions && updatedSong.chartPositions.length > 0) {
       const avgChartPos = updatedSong.chartPositions.reduce((a, c) => a + c.position, 0) / updatedSong.chartPositions.length;
@@ -302,6 +321,11 @@ export const simulateWeek = (save: SaveData): SaveData => {
     );
 
     let streamCount = Math.floor(weeklyPoints * 200);
+
+    // Distribute across platforms by market share
+    const platformShares: Record<string, number> = {
+      spotify: 0.50, apple: 0.20, youtube: 0.15, amazon: 0.07, soundcloud: 0.05, pandora: 0.03
+    };
 
     // --- Viral system integration ---
     // Ensure viral fields exist
@@ -382,13 +406,23 @@ export const simulateWeek = (save: SaveData): SaveData => {
       updatedSong.viral_score = Math.min(100, (updatedSong.viral_score || 0) + 20);
     }
     const newSales = Math.floor(streamCount * 0.02); // Rough conversion: streams to sales
-    
+
     weeklyListeners += streamCount;
-    weeklyIncome += streamCount * 0.008; // $0.008 per stream on average
-    weeklyFans += Math.floor(weeklyPoints * 0.08);
-    
-    updatedSong.totalSales += newSales;
+    // Distribute income by platform rates
+    const platformRates: Record<string, number> = {
+      spotify: 0.004, apple: 0.007, youtube: 0.002, amazon: 0.003, soundcloud: 0.001, pandora: 0.0013
+    };
+    let weekIncome = 0;
+    Object.entries(platformShares).forEach(([pid, share]) => {
+      const pStreams = Math.floor(streamCount * share);
+      updatedSong.totalStreams[pid] = (updatedSong.totalStreams[pid] || 0) + pStreams;
+      weekIncome += pStreams * (platformRates[pid] || 0.004);
+    });
     updatedSong.totalStreams['all'] = (updatedSong.totalStreams['all'] || 0) + streamCount;
+    weeklyIncome += weekIncome;
+    weeklyFans += Math.floor(weeklyPoints * 0.08);
+
+    updatedSong.totalSales += newSales;
     updatedSong.lastWeekSales = newSales;
 
     return updatedSong;
@@ -413,7 +447,7 @@ export const simulateWeek = (save: SaveData): SaveData => {
     song.chartPositions.forEach(chart => {
       const playlist = PLAYLISTS.find(p => p.id === chart.playlistId);
       if (playlist) {
-        newSave.regionalPopularity[playlist.location] = 
+        newSave.regionalPopularity[playlist.location] =
           Math.min(100, (newSave.regionalPopularity[playlist.location] || 0) + 2);
       }
     });
@@ -437,33 +471,33 @@ export const simulateWeek = (save: SaveData): SaveData => {
 
   newSave.merchandise = (newSave.merchandise || []).map(item => {
     const updatedItem = { ...item };
-    
+
     // Merchandise sales formula with uncertainty:
     // Base sales depends on fame, popularity, and item quality
     const baseSales = Math.floor(newSave.fans * 0.005 * (newSave.popularity / 100) * (item.quality / 100));
-    
+
     // Hype multiplier: increases if recent viral songs, active trends affecting merch interest
     const recentHitSongs = newSave.catalog
-      .filter(s => s.isReleased && s.isUser && 
-              (newSave.week + newSave.year * 52) - (s.releaseWeek! + s.releaseYear! * 52) <= 12)
+      .filter(s => s.isReleased && s.isUser &&
+        (newSave.week + newSave.year * 52) - (s.releaseWeek! + s.releaseYear! * 52) <= 12)
       .filter(s => s.chartPositions && s.chartPositions.some(c => c.position <= 50));
-    
+
     const viralBoost = recentHitSongs.length > 0 ? 1.5 : 1.0;
-    
+
     // Random variance: -60% to +150% variance to simulate uncertainty
     const randomVariance = (Math.random() * 2.1) - 0.6; // -0.6 to 1.5 multiplier
     const weeklyUnits = Math.max(0, Math.floor((baseSales * viralBoost) + (baseSales * randomVariance)));
-    
+
     const profitPerUnit = item.price - item.productionCost;
     const weekRevenue = weeklyUnits * profitPerUnit;
-    
+
     updatedItem.unitsSoldThisWeek = weeklyUnits;
     updatedItem.stock = Math.max(0, updatedItem.stock - weeklyUnits);
     updatedItem.totalUnitsSold += weeklyUnits;
-    
+
     merchandiseRevenue += weekRevenue;
     totalMerchSold += weeklyUnits;
-    
+
     return updatedItem;
   });
 
@@ -479,14 +513,14 @@ export const calculateRhythmPerformance = (accuracy: number, difficulty: number,
   const fansGained = Math.floor(score / 30);
   const xpGained = Math.floor(score / 80);
   const moneyGained = Math.floor(score * 0.5);
-  
+
   return { score, fansGained, xpGained, moneyGained };
 };
 
 // Release a song to charts
 export const releaseSongToCharts = (song: Song, save: SaveData, playlistIds?: string[]): Song => {
   const updatedSong = { ...song };
-  
+
   if (!updatedSong.chartPositions) {
     updatedSong.chartPositions = [];
   }

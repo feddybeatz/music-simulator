@@ -10,20 +10,25 @@ interface StreamingViewProps {
 const StreamingView: React.FC<StreamingViewProps> = ({ save }) => {
   const calculatePlatformStats = (platformId: string) => {
     let totalStreams = 0;
-    let revenue = 0;
-    
+
     save.catalog.forEach(song => {
       if (song.isReleased && song.totalStreams) {
-        const platformStreams = song.totalStreams[platformId] || 0;
-        totalStreams += platformStreams;
+        // Use platform-specific key if available, otherwise estimate from 'all' using market share
+        const platformStreams = song.totalStreams[platformId];
+        if (platformStreams !== undefined) {
+          totalStreams += platformStreams;
+        } else {
+          // fallback for old saves: estimate from total using market share
+          const platform = STREAMING_PLATFORMS.find(p => p.id === platformId);
+          const allStreams = song.totalStreams['all'] || 0;
+          totalStreams += Math.floor(allStreams * (platform?.marketShare || 0));
+        }
       }
     });
-    
+
     const platform = STREAMING_PLATFORMS.find(p => p.id === platformId);
-    if (platform) {
-      revenue = totalStreams * platform.ratePerStream;
-    }
-    
+    const revenue = totalStreams * (platform?.ratePerStream || 0.004);
+
     return { totalStreams, revenue };
   };
 
@@ -62,7 +67,7 @@ const StreamingView: React.FC<StreamingViewProps> = ({ save }) => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {platformStats.map((platform) => {
             const percentage = totalAllStreams > 0 ? (platform.totalStreams / totalAllStreams * 100) : 0;
-            
+
             return (
               <div
                 key={platform.id}
